@@ -38,7 +38,7 @@ class AnalysisConfig:
     # ------------------------------------------------------------------
     # Composicao
     # ------------------------------------------------------------------
-    passo_composicao: float = 0.5
+    passo_composicao: float = 0.005
 
     # ordem_material = 1 -> Aco no engaste / Titanio na ponta
     # ordem_material = 2 -> Titanio no engaste / Aco na ponta
@@ -57,7 +57,7 @@ class AnalysisConfig:
     # Analise modal e convergencia
     # ------------------------------------------------------------------
     N: int = 6  # numero de modos elasticos salvos
-    erro_admissivel: float = 1e-4  # erro percentual admissivel [%]
+    erro_admissivel: float = 1e-3  # erro percentual admissivel [%]
 
     NE_ini: int = 20
     passo_elementos: int = 1
@@ -66,6 +66,15 @@ class AnalysisConfig:
     # numero de ultimos modos usados no criterio de convergencia
     # use None para usar todos os modos
     n_ultimos_controle: int | None = None
+
+    # ------------------------------------------------------------------
+    # Otimizacoes numericas
+    # ------------------------------------------------------------------
+    # Mantem as rotinas genericas validadas como fallback. Estes atalhos
+    # so devem ser usados quando as hipoteses do caso especial forem atendidas.
+    usar_montagem_retilinea_otimizada: bool = True
+    usar_matrizes_esparsas: bool = True
+    usar_solver_modal_parcial: bool = True
 
     # ------------------------------------------------------------------
     # Impressao no terminal

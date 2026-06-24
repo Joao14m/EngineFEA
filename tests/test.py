@@ -5,7 +5,14 @@ import numpy as np
 
 from modelo_core import assem, beam2d
 from modelo_matematico.config import AnalysisConfig
-from modelo_matematico.fem_solver import build_topology, run_analysis
+from modelo_matematico.fem_solver import (
+    assemble_global_matrices,
+    assemble_global_matrices_straight_x,
+    build_coordinates,
+    build_dof,
+    build_topology,
+    run_analysis,
+)
 
 
 class CoreNumericsTest(unittest.TestCase):
@@ -47,6 +54,58 @@ class CoreNumericsTest(unittest.TestCase):
                 dtype=np.int32,
             ),
         )
+
+    def test_straight_x_fast_assembly_matches_generic_assembly(self):
+        config = AnalysisConfig()
+        x_nodes = np.linspace(0.0, config.L, 5)
+        edof = build_topology(x_nodes.size - 1)
+        coord = build_coordinates(x_nodes)
+        dof = build_dof(x_nodes.size)
+        A = config.b * config.h
+        I = config.b * config.h**3 / 12.0
+        segments = np.array(
+            [[0.0, config.L, config.E_aco, config.rho_aco]],
+            dtype=float,
+        )
+
+        K_generic, M_generic, ex_generic, ey_generic = assemble_global_matrices(
+            edof=edof,
+            coord=coord,
+            dof=dof,
+            segments=segments,
+            A=A,
+            I=I,
+            L_total=config.L,
+        )
+        K_fast, M_fast, ex_fast, ey_fast = assemble_global_matrices_straight_x(
+            edof=edof,
+            coord=coord,
+            dof=dof,
+            x_nodes=x_nodes,
+            segments=segments,
+            A=A,
+            I=I,
+            L_total=config.L,
+            use_sparse=False,
+        )
+        K_sparse, M_sparse, _, _ = assemble_global_matrices_straight_x(
+            edof=edof,
+            coord=coord,
+            dof=dof,
+            x_nodes=x_nodes,
+            segments=segments,
+            A=A,
+            I=I,
+            L_total=config.L,
+            use_sparse=True,
+        )
+
+        np.testing.assert_allclose(ex_fast, ex_generic)
+        np.testing.assert_allclose(ey_fast, ey_generic)
+        np.testing.assert_allclose(K_fast, K_generic)
+        np.testing.assert_allclose(M_fast, M_generic)
+        np.testing.assert_allclose(K_sparse.toarray(), K_generic)
+        np.testing.assert_allclose(M_sparse.toarray(), M_generic)
 
 
 class AnalysisSmokeTest(unittest.TestCase):

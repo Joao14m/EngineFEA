@@ -5,6 +5,7 @@ from dataclasses import asdict
 from typing import Any
 
 import numpy as np
+from scipy import sparse as sp
 
 from modelo_matematico.config import AnalysisConfig
 
@@ -22,7 +23,7 @@ from modelo_matematico.config import AnalysisConfig
 #
 # Os imports abaixo assumem essa estrutura.
 # ---------------------------------------------------------------------------
-from modelo_core import assem, beam2d, coordxtr, eigen_solver
+from modelo_core import assem, beam2d, coordxtr, eigen_solver, eigen_solver_partial
 
 MATERIAL_STEEL = 0
 MATERIAL_TITANIUM = 1
@@ -367,6 +368,194 @@ def assemble_global_matrices(
     return K, M, ex, ey
 
 
+def _is_straight_x_beam_case(
+    edof: np.ndarray,
+    coord: np.ndarray,
+    dof: np.ndarray,
+    x_nodes: np.ndarray,
+) -> bool:
+    """
+    Verifica as hipoteses do caminho rapido:
+    viga 2D retilinea, elementos de dois nos, topologia sequencial e eixo local x
+    coincidente com o eixo global x.
+    """
+    if coord.ndim != 2 or coord.shape[1] < 2:
+        return False
+
+    if coord.shape[0] != x_nodes.size or dof.shape != (x_nodes.size, 3):
+        return False
+
+    if edof.ndim != 2 or edof.shape != (x_nodes.size - 1, 7):
+        return False
+
+    if not np.allclose(coord[:, 0], x_nodes):
+        return False
+
+    if not np.allclose(coord[:, 1], coord[0, 1]):
+        return False
+
+    if np.any(np.diff(x_nodes) <= 0.0):
+        return False
+
+    expected_dof = np.arange(3 * x_nodes.size, dtype=np.int32).reshape(x_nodes.size, 3)
+    if not np.array_equal(dof, expected_dof):
+        return False
+
+    expected_edof = build_topology(x_nodes.size - 1)
+    return np.array_equal(edof, expected_edof)
+
+
+def _beam2d_x_element_matrices(
+    length: float,
+    E: float,
+    A: float,
+    I: float,
+    m: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Matrizes do mesmo elemento de viga 2D, especializadas para elemento
+    alinhado ao eixo global x. Nesse caso, a transformacao local-global e I.
+    """
+    if length <= 0.0:
+        raise ValueError("Comprimento do elemento deve ser positivo.")
+
+    EA_L = E * A / length
+    EI = E * I
+    L2 = length * length
+    L3 = L2 * length
+
+    Ke = np.array(
+        [
+            [EA_L, 0.0, 0.0, -EA_L, 0.0, 0.0],
+            [0.0, 12.0 * EI / L3, 6.0 * EI / L2, 0.0, -12.0 * EI / L3, 6.0 * EI / L2],
+            [0.0, 6.0 * EI / L2, 4.0 * EI / length, 0.0, -6.0 * EI / L2, 2.0 * EI / length],
+            [-EA_L, 0.0, 0.0, EA_L, 0.0, 0.0],
+            [0.0, -12.0 * EI / L3, -6.0 * EI / L2, 0.0, 12.0 * EI / L3, -6.0 * EI / L2],
+            [0.0, 6.0 * EI / L2, 2.0 * EI / length, 0.0, -6.0 * EI / L2, 4.0 * EI / length],
+        ],
+        dtype=float,
+    )
+
+    Me = (
+        m
+        * length
+        / 420.0
+        * np.array(
+            [
+                [140.0, 0.0, 0.0, 70.0, 0.0, 0.0],
+                [0.0, 156.0, 22.0 * length, 0.0, 54.0, -13.0 * length],
+                [0.0, 22.0 * length, 4.0 * L2, 0.0, 13.0 * length, -3.0 * L2],
+                [70.0, 0.0, 0.0, 140.0, 0.0, 0.0],
+                [0.0, 54.0, 13.0 * length, 0.0, 156.0, -22.0 * length],
+                [0.0, -13.0 * length, -3.0 * L2, 0.0, -22.0 * length, 4.0 * L2],
+            ],
+            dtype=float,
+        )
+    )
+
+    return Ke, Me
+
+
+def _material_index_for_centers(
+    centers: np.ndarray,
+    segments: np.ndarray,
+    L_total: float,
+) -> np.ndarray:
+    tol = 1e-10 * L_total
+    segment_ends = segments[:, 1] + tol
+    material_idx = np.searchsorted(segment_ends, centers, side="left")
+
+    if np.any(material_idx >= segments.shape[0]):
+        raise ValueError("Elemento encontrado fora dos trechos de material.")
+
+    starts = segments[material_idx, 0]
+    ends = segments[material_idx, 1]
+
+    if np.any((centers < starts - tol) | (centers > ends + tol)):
+        raise ValueError("Elemento encontrado fora dos trechos de material.")
+
+    return material_idx.astype(np.int32)
+
+
+def assemble_global_matrices_straight_x(
+    edof: np.ndarray,
+    coord: np.ndarray,
+    dof: np.ndarray,
+    x_nodes: np.ndarray,
+    segments: np.ndarray,
+    A: float,
+    I: float,
+    L_total: float,
+    use_sparse: bool,
+) -> tuple[np.ndarray | sp.csr_matrix, np.ndarray | sp.csr_matrix, np.ndarray, np.ndarray]:
+    """
+    Caso especial otimizado para a viga 2D retilinea atual.
+
+    O elemento continua tendo 3 GDL por no (u, v, theta). A diferenca e que,
+    como todos os elementos estao alinhados ao eixo x, a rotacao local-global
+    e identidade e a montagem pode ser feita diretamente.
+    """
+    if not _is_straight_x_beam_case(edof, coord, dof, x_nodes):
+        raise ValueError("Hipoteses do caso especial retilineo nao atendidas.")
+
+    n_elements = edof.shape[0]
+    n_dof_total = int(np.max(edof[:, 1:]) + 1)
+
+    ex = np.column_stack((x_nodes[:-1], x_nodes[1:]))
+    ey = np.full_like(ex, float(coord[0, 1]))
+
+    lengths = x_nodes[1:] - x_nodes[:-1]
+    centers = 0.5 * (x_nodes[:-1] + x_nodes[1:])
+    material_idx = _material_index_for_centers(centers, segments, L_total)
+
+    matrix_size = n_elements * 36
+    rows = np.empty(matrix_size, dtype=np.int32)
+    cols = np.empty(matrix_size, dtype=np.int32)
+    values_K = np.empty(matrix_size, dtype=float)
+    values_M = np.empty(matrix_size, dtype=float)
+
+    element_cache: dict[tuple[float, float, float], tuple[np.ndarray, np.ndarray]] = {}
+
+    for i in range(n_elements):
+        idx = edof[i, 1:]
+        mat_id = int(material_idx[i])
+        E_i = float(segments[mat_id, 2])
+        rho_i = float(segments[mat_id, 3])
+        length_i = float(lengths[i])
+        cache_key = (length_i, E_i, rho_i)
+
+        if cache_key not in element_cache:
+            element_cache[cache_key] = _beam2d_x_element_matrices(
+                length=length_i,
+                E=E_i,
+                A=A,
+                I=I,
+                m=rho_i * A,
+            )
+
+        Ke, Me = element_cache[cache_key]
+
+        start = i * 36
+        stop = start + 36
+        rows[start:stop] = np.repeat(idx, 6)
+        cols[start:stop] = np.tile(idx, 6)
+        values_K[start:stop] = Ke.reshape(-1)
+        values_M[start:stop] = Me.reshape(-1)
+
+    if use_sparse:
+        shape = (n_dof_total, n_dof_total)
+        K_sparse = sp.coo_matrix((values_K, (rows, cols)), shape=shape).tocsr()
+        M_sparse = sp.coo_matrix((values_M, (rows, cols)), shape=shape).tocsr()
+        return K_sparse, M_sparse, ex, ey
+
+    K = np.zeros((n_dof_total, n_dof_total), dtype=float)
+    M = np.zeros((n_dof_total, n_dof_total), dtype=float)
+    np.add.at(K, (rows, cols), values_K)
+    np.add.at(M, (rows, cols), values_M)
+
+    return K, M, ex, ey
+
+
 # ---------------------------------------------------------------------------
 # CONDICOES DE CONTORNO E PROBLEMA MODAL
 # ---------------------------------------------------------------------------
@@ -397,12 +586,23 @@ def solve_modal_problem(
     boundary_dofs: np.ndarray,
     cc: int,
     n_modes: int,
+    use_partial_solver: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Resolve o problema generalizado de autovalores e remove os modos rigidos
     quando a viga e livre-livre.
     """
-    eigenvalues_all, eigenvectors_all = eigen_solver(K, M, boundary_dofs)
+    n_rigid_modes = 3 if cc == 0 else 0
+
+    if use_partial_solver:
+        eigenvalues_all, eigenvectors_all = eigen_solver_partial(
+            K,
+            M,
+            boundary_dofs,
+            n_eigenpairs=n_rigid_modes + n_modes,
+        )
+    else:
+        eigenvalues_all, eigenvectors_all = eigen_solver(K, M, boundary_dofs)
 
     eigenvalues_all = np.real(np.asarray(eigenvalues_all, dtype=float).reshape(-1))
     eigenvectors_all = np.asarray(eigenvectors_all, dtype=float)
@@ -421,8 +621,6 @@ def solve_modal_problem(
 
     # O eigen_solver portado deve seguir o comportamento do eigen.m:
     # autovalores e autovetores ja ordenados em ordem crescente.
-    n_rigid_modes = 3 if cc == 0 else 0
-
     if frequencies_all.size < n_rigid_modes + n_modes:
         raise ValueError(
             "Numero insuficiente de modos calculados. Aumente NE ou reduza N."
@@ -558,15 +756,33 @@ def run_configuration(
         coord = build_coordinates(x_nodes)
         dof = build_dof(n_nodes)
 
-        K, M, _, _ = assemble_global_matrices(
+        if config.usar_montagem_retilinea_otimizada and _is_straight_x_beam_case(
             edof=edof,
             coord=coord,
             dof=dof,
-            segments=segments,
-            A=A,
-            I=I,
-            L_total=config.L,
-        )
+            x_nodes=x_nodes,
+        ):
+            K, M, _, _ = assemble_global_matrices_straight_x(
+                edof=edof,
+                coord=coord,
+                dof=dof,
+                x_nodes=x_nodes,
+                segments=segments,
+                A=A,
+                I=I,
+                L_total=config.L,
+                use_sparse=config.usar_matrizes_esparsas,
+            )
+        else:
+            K, M, _, _ = assemble_global_matrices(
+                edof=edof,
+                coord=coord,
+                dof=dof,
+                segments=segments,
+                A=A,
+                I=I,
+                L_total=config.L,
+            )
 
         nd = M.shape[0]
         boundary_dofs = get_boundary_conditions(config.cc, nd)
@@ -577,6 +793,7 @@ def run_configuration(
             boundary_dofs=boundary_dofs,
             cc=config.cc,
             n_modes=config.N,
+            use_partial_solver=config.usar_solver_modal_parcial,
         )
 
         frequency_history.append(frequencies)

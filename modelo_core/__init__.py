@@ -11,7 +11,7 @@ Este pacote agrupa as funcoes basicas usadas pelo solver principal:
 from .assembly import assem, assembly
 from .beam2d import beam2d
 from .coordxtr import coordxtr
-from .eigen_solver import eigen_solver
+from .eigen_solver import eigen_solver, eigen_solver_partial
 
 __all__ = [
     "assem",
@@ -19,4 +19,5 @@ __all__ = [
     "beam2d",
     "coordxtr",
     "eigen_solver",
+    "eigen_solver_partial",
 ]
