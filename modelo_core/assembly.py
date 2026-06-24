@@ -1,45 +1,55 @@
 import numpy as np
 
-# FUNÇÃO ASSEMBLY
-# MONTAR A MATRIZ ELEMENTAR KE (E FE) NA MATRIZ GLOBAL
-# DE RIGIDEZ K ( E O VETOR GLOBAL DE FORÇAS F)
 
-# INPUT:    edof: Topologia da Matriz dof
-#           K: Matriz global de rigidez (n x n)
-#           Ke: Matriz elementar de rigidez (n x n)
-#           f: Vetor global de forças (n x 1)
-#           fe: Vetor elementar de forças (n x 1)
+def assem(edof, K, Ke, f=None, fe=None):
+    """
+    Monta uma matriz elementar na matriz global.
 
-# OUTPUT:   K: NOVA Matriz global de rigidez (n x n)
-#           f: NOVO Vetor global de forças (n x 1)
+    Convencao deste projeto:
+    - edof[:, 0] contem o indice do elemento.
+    - edof[:, 1:] contem os GDL globais em base zero.
+    """
+    edof = np.asarray(edof, dtype=int)
+    K = np.asarray(K, dtype=float)
+    Ke = np.asarray(Ke, dtype=float)
 
+    if edof.ndim == 1:
+        edof = edof.reshape(1, -1)
 
-def assembly(edof, K, Ke, f=None, fe=None):
-    n_linhas, n_colunas = edof.shape
+    if edof.ndim != 2 or edof.shape[1] < 2:
+        raise ValueError("edof deve ter coluna de elemento e colunas de GDL.")
 
-    graus_liberdade = edof[
-        :, 1:n_colunas
-    ]  # Primeira coluna esta associada ao número do elmento
+    dofs = edof[:, 1:]
 
-    for i in range(n_linhas):
-        graus_liberdade_i = graus_liberdade[i, :]  # Graus de liberdade do elemento i
+    for dofs_i in dofs:
+        idx = dofs_i.astype(int)
 
-        idx = (
-            graus_liberdade_i.astype(int) - 1
-        )  # Ajusta os índices para Python (base 0)
+        if np.any(idx < 0) or np.any(idx >= K.shape[0]):
+            raise IndexError("edof contem GDL fora dos limites da matriz global.")
 
-        K[np.ix_(idx, idx)] += Ke  # Monta a NOVA matriz global de rigidez
+        if Ke.shape != (idx.size, idx.size):
+            raise ValueError("Ke deve ter dimensao compativel com os GDL do elemento.")
+
+        K[np.ix_(idx, idx)] += Ke
 
         if fe is not None:
             if f is None:
                 raise ValueError(
-                    "Vetor global de forças f não pode ser None se fe não for None."
+                    "Vetor global de forcas f nao pode ser None se fe nao for None."
                 )
 
-            fe = np.array(fe).reshape(-1, 1)  # Garante que fe seja um vetor coluna
-            f[idx, :] += fe  # Monta o NOVO vetor global de forças
+            fe_col = np.asarray(fe, dtype=float).reshape(-1, 1)
+            if fe_col.shape[0] != idx.size:
+                raise ValueError("fe deve ter dimensao compativel com os GDL.")
+
+            f[idx, :] += fe_col
 
     if fe is not None:
         return K, f
-    else:
-        return K, f
+
+    return K
+
+
+def assembly(edof, K, Ke, f=None, fe=None):
+    """Alias mantido para compatibilidade com o nome antigo."""
+    return assem(edof, K, Ke, f=f, fe=fe)

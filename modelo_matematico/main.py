@@ -1,6 +1,14 @@
-from config import AnalysisConfig
-from fem_solver import run_analysis
-from results_io import save_results
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from modelo_matematico.config import AnalysisConfig
+from modelo_matematico.fem_solver import run_analysis
+from modelo_matematico.results_io import save_results
 
 
 def main() -> None:

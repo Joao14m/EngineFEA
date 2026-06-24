@@ -38,7 +38,7 @@ class AnalysisConfig:
     # ------------------------------------------------------------------
     # Composicao
     # ------------------------------------------------------------------
-    passo_composicao: float = 0.005
+    passo_composicao: float = 0.05
 
     # ordem_material = 1 -> Aco no engaste / Titanio na ponta
     # ordem_material = 2 -> Titanio no engaste / Aco na ponta
@@ -57,7 +57,7 @@ class AnalysisConfig:
     # Analise modal e convergencia
     # ------------------------------------------------------------------
     N: int = 6  # numero de modos elasticos salvos
-    erro_admissivel: float = 1e-5  # erro percentual admissivel [%]
+    erro_admissivel: float = 1e-4  # erro percentual admissivel [%]
 
     NE_ini: int = 20
     passo_elementos: int = 1

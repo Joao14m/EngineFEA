@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from config import AnalysisConfig
+from modelo_matematico.config import AnalysisConfig
 
 # ---------------------------------------------------------------------------
 # IMPORTANTE SOBRE A PASTA DAS FUNCOES PORTADAS
@@ -22,8 +22,7 @@ from config import AnalysisConfig
 #
 # Os imports abaixo assumem essa estrutura.
 # ---------------------------------------------------------------------------
-from modelo_core import beam2d, coordxtr, eigen_solver
-from modelo_core import assembly as assem
+from modelo_core import assem, beam2d, coordxtr, eigen_solver
 
 MATERIAL_STEEL = 0
 MATERIAL_TITANIUM = 1

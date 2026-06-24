@@ -2,3 +2,5 @@
 vcpkg_installed/
 
 .vscode/
+__pycache__/
+*.pyc

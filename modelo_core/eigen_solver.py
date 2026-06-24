@@ -47,7 +47,7 @@ def eigen_solver(K, M, cc=None, retornar_autovetores=True):
         for j in range(n_gll):
             xj = X1[:, j].reshape(-1, 1)
 
-            m_norm = float(np.sqrt(xj.T @ M_reduzida @ xj))
+            m_norm = float(np.sqrt((xj.T @ M_reduzida @ xj).item()))
 
             X1[:, j] = (xj / m_norm).reshape(-1)
 
