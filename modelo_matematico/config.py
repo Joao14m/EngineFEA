@@ -23,8 +23,8 @@ class AnalysisConfig:
     # Geometria
     # ------------------------------------------------------------------
     L: float = 10.0  # comprimento da viga [m]
-    h: float = 5e-2  # altura da viga [m]
-    b: float = 1  # largura/espessura da viga [m]
+    h: float = 1.0  # altura da viga [m]
+    b: float = 1.0  # largura/espessura da viga [m]
 
     # ------------------------------------------------------------------
     # Materiais
@@ -38,7 +38,7 @@ class AnalysisConfig:
     # ------------------------------------------------------------------
     # Composicao
     # ------------------------------------------------------------------
-    passo_composicao: float = 0.0025
+    passo_composicao: float = 0.005
 
     # ordem_material = 1 -> Aco no engaste / Titanio na ponta
     # ordem_material = 2 -> Titanio no engaste / Aco na ponta
