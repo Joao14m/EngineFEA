@@ -9,20 +9,6 @@ from scipy import sparse as sp
 
 from modelo_matematico.config import AnalysisConfig
 
-# ---------------------------------------------------------------------------
-# IMPORTANTE SOBRE A PASTA DAS FUNCOES PORTADAS
-# ---------------------------------------------------------------------------
-# Evite chamar a pasta de "math", pois isso conflita com a biblioteca padrao
-# do Python. Recomenda-se usar:
-#
-#     calfem_core/
-#         assembly.py
-#         beam2d.py
-#         coordxtr.py
-#         eigen_solver.py
-#
-# Os imports abaixo assumem essa estrutura.
-# ---------------------------------------------------------------------------
 from modelo_core import assem, beam2d, coordxtr, eigen_solver, eigen_solver_partial
 
 MATERIAL_STEEL = 0
@@ -34,6 +20,7 @@ MATERIAL_TITANIUM = 1
 # ---------------------------------------------------------------------------
 
 
+# CRIA OS VETORES DE COMPOSIÇÃO, LEVANDO EM CONSIDERAÇÃO QUAL MATERIAL ESTÁ NO ENGASTE E QUAL ESTÁ NA PONTA.
 def create_composition_vectors(
     passo_composicao: float,
     ordem_material: int,
@@ -76,6 +63,7 @@ def create_composition_vectors(
     return perc_aco_vec, perc_ti_vec
 
 
+# CRIA OS NOMES DAS CONFIGURACOES E VARIAVEIS PARA IMPRESSAO E SALVAMENTO DE RESULTADOS.
 def create_configuration_names(
     perc_aco_vec: np.ndarray,
     perc_ti_vec: np.ndarray,
@@ -111,6 +99,7 @@ def create_configuration_names(
 # ---------------------------------------------------------------------------
 
 
+# CRIA OS TRECHOS DE MATERIAL PARA UMA CONFIGURACAO, RETORNANDO OS TRECHOS, O ID DO MATERIAL E OS NOMES DOS MATERIAIS.
 def create_material_segments(
     p_aco: float,
     p_ti: float,
@@ -184,6 +173,7 @@ def create_material_segments(
     return segments, material_id, material_names
 
 
+# VALIDA OS TRECHOS DE MATERIAL, VERIFICANDO SE ESTAO EM ORDEM CRESCENTE E SE O ULTIMO PONTO FINAL E IGUAL A L.
 def validate_segments(segments: np.ndarray, L: float) -> None:
     tol = 1e-10 * L
 
@@ -210,6 +200,7 @@ def validate_segments(segments: np.ndarray, L: float) -> None:
 # ---------------------------------------------------------------------------
 
 
+# GERA A MALHA POR TRECHOS DE MATERIAL
 def generate_mesh_by_segments(
     segments: np.ndarray,
     NE_base: int,
@@ -268,6 +259,7 @@ def generate_mesh_by_segments(
     return x_nodes, n_elem_segment
 
 
+# CRIA A TOPOLOGIA DA MALHA
 def build_topology(n_elements: int) -> np.ndarray:
     """
     Cria a matriz Edof em base zero.
@@ -303,6 +295,7 @@ def build_dof(n_nodes: int) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
+# MONTA K E M, USANDO ASSEMBLY
 def _assem_matrix(
     edof_row: np.ndarray, global_matrix: np.ndarray, element_matrix: np.ndarray
 ) -> np.ndarray:
@@ -318,6 +311,7 @@ def _assem_matrix(
     return assembled
 
 
+# MONTA K E M USANDO COORDXTR, BEAM2D E ASSEM PORTADOS.
 def assemble_global_matrices(
     edof: np.ndarray,
     coord: np.ndarray,
@@ -428,10 +422,24 @@ def _beam2d_x_element_matrices(
         [
             [EA_L, 0.0, 0.0, -EA_L, 0.0, 0.0],
             [0.0, 12.0 * EI / L3, 6.0 * EI / L2, 0.0, -12.0 * EI / L3, 6.0 * EI / L2],
-            [0.0, 6.0 * EI / L2, 4.0 * EI / length, 0.0, -6.0 * EI / L2, 2.0 * EI / length],
+            [
+                0.0,
+                6.0 * EI / L2,
+                4.0 * EI / length,
+                0.0,
+                -6.0 * EI / L2,
+                2.0 * EI / length,
+            ],
             [-EA_L, 0.0, 0.0, EA_L, 0.0, 0.0],
             [0.0, -12.0 * EI / L3, -6.0 * EI / L2, 0.0, 12.0 * EI / L3, -6.0 * EI / L2],
-            [0.0, 6.0 * EI / L2, 2.0 * EI / length, 0.0, -6.0 * EI / L2, 4.0 * EI / length],
+            [
+                0.0,
+                6.0 * EI / L2,
+                2.0 * EI / length,
+                0.0,
+                -6.0 * EI / L2,
+                4.0 * EI / length,
+            ],
         ],
         dtype=float,
     )
@@ -487,7 +495,9 @@ def assemble_global_matrices_straight_x(
     I: float,
     L_total: float,
     use_sparse: bool,
-) -> tuple[np.ndarray | sp.csr_matrix, np.ndarray | sp.csr_matrix, np.ndarray, np.ndarray]:
+) -> tuple[
+    np.ndarray | sp.csr_matrix, np.ndarray | sp.csr_matrix, np.ndarray, np.ndarray
+]:
     """
     Caso especial otimizado para a viga 2D retilinea atual.
 
@@ -587,7 +597,7 @@ def solve_modal_problem(
     cc: int,
     n_modes: int,
     use_partial_solver: bool = False,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, bool]:
     """
     Resolve o problema generalizado de autovalores e remove os modos rigidos
     quando a viga e livre-livre.
@@ -609,7 +619,8 @@ def solve_modal_problem(
 
     tol_lambda = 1e-9 * max(1.0, float(np.max(np.abs(eigenvalues_all))))
 
-    if np.any(eigenvalues_all < -tol_lambda):
+    had_warning = bool(np.any(eigenvalues_all < -tol_lambda))
+    if had_warning:
         print(
             "Warning: foram encontrados autovalores negativos relevantes. "
             "Verifique K, M e as condicoes de contorno."
@@ -631,7 +642,7 @@ def solve_modal_problem(
     frequencies = frequencies_all[elastic_idx]
     modal_vectors = eigenvectors_all[:, elastic_idx]
 
-    return frequencies, modal_vectors
+    return frequencies, modal_vectors, had_warning
 
 
 # ---------------------------------------------------------------------------
@@ -719,6 +730,7 @@ def run_configuration(
     NE = config.NE_ini
     iteration = 0
     converged = False
+    had_warning = False
     error_current = np.inf
     critical_mode = np.nan
 
@@ -747,6 +759,7 @@ def run_configuration(
         dx_med = float(config.L / n_elements)
 
         if dx_min < 0.05 * dx_med:
+            had_warning = True
             print(
                 "Warning: elemento muito pequeno detectado: "
                 f"dx_min = {dx_min:.6e} m | dx_medio = {dx_med:.6e} m"
@@ -787,7 +800,7 @@ def run_configuration(
         nd = M.shape[0]
         boundary_dofs = get_boundary_conditions(config.cc, nd)
 
-        frequencies, modal_vectors = solve_modal_problem(
+        frequencies, modal_vectors, modal_had_warning = solve_modal_problem(
             K=K,
             M=M,
             boundary_dofs=boundary_dofs,
@@ -795,6 +808,7 @@ def run_configuration(
             n_modes=config.N,
             use_partial_solver=config.usar_solver_modal_parcial,
         )
+        had_warning = had_warning or modal_had_warning
 
         frequency_history.append(frequencies)
 
@@ -877,6 +891,7 @@ def run_configuration(
             break
 
         if iteration >= config.max_iter:
+            had_warning = True
             print(
                 f"Warning: numero maximo de iteracoes atingido na configuracao {config_name}."
             )
@@ -928,6 +943,7 @@ def run_configuration(
         "critical_error": error_current if np.isfinite(error_current) else np.nan,
         "critical_mode": critical_mode,
         "converged": converged,
+        "had_warning": had_warning,
         "nodes": final_x_nodes,
         "segments": segments,
         "segment_material_id": material_id,
@@ -981,6 +997,7 @@ def pack_results(
     critical_error = np.full(n_config, np.nan, dtype=float)
     critical_mode = np.full(n_config, np.nan, dtype=float)
     converged = np.zeros(n_config, dtype=np.int32)
+    had_warning = np.zeros(n_config, dtype=np.int32)
 
     nodes = np.full((n_config, max_nodes), np.nan, dtype=float)
     modes_v = np.full((n_config, max_nodes, n_modes), np.nan, dtype=float)
@@ -1008,6 +1025,7 @@ def pack_results(
         critical_error[ic] = float(result["critical_error"])
         critical_mode[ic] = float(result["critical_mode"])
         converged[ic] = int(result["converged"])
+        had_warning[ic] = int(result["had_warning"])
 
         nodes[ic, :nn] = result["nodes"]
         modes_v[ic, :nn, :] = result["modes_v"]
@@ -1031,6 +1049,7 @@ def pack_results(
             critical_error,
             critical_mode,
             converged.astype(float),
+            had_warning.astype(float),
         )
     )
 
@@ -1054,6 +1073,11 @@ def pack_results(
         "critical_error": critical_error,
         "critical_mode": critical_mode,
         "converged": converged,
+        "had_warning": had_warning,
+        "converged_without_warning": np.array(
+            [int(np.sum((converged == 1) & (had_warning == 0)))],
+            dtype=np.int32,
+        ),
         # Geometria discretizada e modos
         "nodes": nodes,
         "node_count": node_count,
@@ -1140,6 +1164,7 @@ def pack_results(
             "Erro_Critico_percentual",
             "Modo_Critico",
             "Convergiu",
+            "Teve_Warning",
         ],
         "valid_slices": {
             "nodes": "nodes[ic, 0:node_count[ic]]",
@@ -1251,11 +1276,34 @@ def run_analysis(config: AnalysisConfig) -> dict[str, Any]:
         I=I,
         total_time=total_time,
     )
+    n_converged_without_warning = int(results["converged_without_warning"][0])
 
     print("\n===============================================================")
     print("        ANALISE FINALIZADA")
     print("===============================================================")
     print(f"Tempo total do run: {total_time:.6f} s")
+    print(f"Comprimento L = {config.L:.6f} m")
+    print(f"Secao: b = {config.b:.6f} m | h = {config.h:.6f} m")
+    print(f"cc = {config.cc}")
+    print(f"N = {config.N} modos")
+    print(f"Erro alvo = {config.erro_admissivel:.6g} %")
+    print(f"NE inicial = {config.NE_ini}")
+    print(f"Passo de elementos = +{config.passo_elementos}")
+    print(f"Passo de composicao = {config.passo_composicao:.6f}")
+    print(
+        "Numero de configuracoes = "
+        f"{n_converged_without_warning}/{n_config} convergiram sem warning"
+    )
+    if config.ordem_material == 1:
+        print("Ordem dos materiais: Aco no engaste / Titanio na ponta")
+    else:
+        print("Ordem dos materiais: Titanio no engaste / Aco na ponta")
+
+    print(
+        "Modos usados no criterio de erro: "
+        + " ".join(str(int(m + 1)) for m in modes_control)
+    )
+    print("Calcular formas modais = 1")
     print("===============================================================\n")
 
     return results
