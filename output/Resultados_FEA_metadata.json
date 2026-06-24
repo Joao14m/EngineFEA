@@ -469,8 +469,8 @@
     "config": {
         "salvar_resultados": true,
         "output_dir": "output",
-        "nome_arquivo_npz": "resultados_mEF_cc0_aco_titanio_005.npz",
-        "nome_arquivo_json": "resultados_mEF_cc0_aco_titanio_005_metadata.json",
+        "nome_arquivo_npz": "Resultados_FEA.npz",
+        "nome_arquivo_json": "Resultados_FEA_metadata.json",
         "L": 3.0,
         "h": 0.05,
         "b": 0.1,

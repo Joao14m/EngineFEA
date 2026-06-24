@@ -16,8 +16,8 @@ class AnalysisConfig:
 
     salvar_resultados: bool = True
     output_dir: str = "output"
-    nome_arquivo_npz: str = "resultados_mEF_cc0_aco_titanio_005.npz"
-    nome_arquivo_json: str = "resultados_mEF_cc0_aco_titanio_005_metadata.json"
+    nome_arquivo_npz: str = "Resultados_FEA.npz"
+    nome_arquivo_json: str = "Resultados_FEA_metadata.json"
 
     # ------------------------------------------------------------------
     # Geometria
