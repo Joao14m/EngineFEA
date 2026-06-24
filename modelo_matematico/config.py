@@ -38,7 +38,7 @@ class AnalysisConfig:
     # ------------------------------------------------------------------
     # Composicao
     # ------------------------------------------------------------------
-    passo_composicao: float = 0.05
+    passo_composicao: float = 0.5
 
     # ordem_material = 1 -> Aco no engaste / Titanio na ponta
     # ordem_material = 2 -> Titanio no engaste / Aco na ponta
