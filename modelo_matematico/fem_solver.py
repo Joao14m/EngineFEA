@@ -691,7 +691,7 @@ def normalize_modal_shapes(
     n_modes: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Extrai v(x) e theta(x), normalizando cada modo por max(abs(v)) = 1.
+    Extrai v e theta nos nos, normalizando cada modo por max(abs(v)) = 1.
     """
     vectors = modal_vectors[:, :n_modes].copy()
 

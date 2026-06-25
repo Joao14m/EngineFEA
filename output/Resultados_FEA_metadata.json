@@ -431,7 +431,9 @@
         "time": "s",
         "nodes": "m",
         "modes_v": "normalizado por max(abs(v)) = 1",
-        "modes_theta": "normalizado pelo mesmo fator de modes_v"
+        "modes_theta": "normalizado pelo mesmo fator de modes_v",
+        "opengl_centerline_vertices": "m para x/z; y usa forma modal normalizada",
+        "opengl_beam_vertices": "m para x/z; y usa forma modal normalizada"
     },
     "columns_segments": [
         "x_ini",
@@ -466,7 +468,12 @@
         "modes_theta": "modes_theta[ic, 0:node_count[ic], mode]",
         "modal_vectors": "modal_vectors[ic, 0:dof_count[ic], mode]",
         "segments": "segments[ic, 0:segment_count[ic], :]",
-        "history": "history[ic, 0:history_count[ic], :]"
+        "history": "history[ic, 0:history_count[ic], :]",
+        "opengl_centerline_vertices": "opengl_centerline_vertices[ic, mode, 0:opengl_centerline_vertex_count[ic], :]",
+        "opengl_centerline_indices": "opengl_centerline_indices[ic, 0:opengl_centerline_index_count[ic]]",
+        "opengl_beam_vertices": "opengl_beam_vertices[ic, mode, 0:opengl_beam_vertex_count[ic], :]",
+        "opengl_beam_indices": "opengl_beam_indices[ic, 0:opengl_beam_index_count[ic]]",
+        "opengl_render_segment_material_id": "opengl_render_segment_material_id[ic, 0:opengl_render_segment_count[ic]]"
     },
     "config": {
         "salvar_resultados": true,
@@ -495,5 +502,15 @@
         "usar_solver_modal_parcial": true,
         "print_resumo_config": true,
         "print_iteracoes": false
+    },
+    "opengl": {
+        "description": "Malha 2D no plano x-y pronta para VBO/IBO. Vertices tem formato [x, y, z], com z = 0. Indices sao base zero.",
+        "interpolation": "Hermite cubica de viga Euler-Bernoulli usando modes_v e modes_theta nodais.",
+        "primitive_centerline": "GL_LINES",
+        "primitive_beam": "GL_TRIANGLES",
+        "padding": "Vertices invalidos usam NaN; indices e material_id invalidos usam -1.",
+        "beam_vertex_layout": "pares [inferior, superior] para cada ponto da linha neutra amostrada.",
+        "deformation": "Forma modal normalizada. A escala visual/animacao pode ser aplicada no renderizador.",
+        "samples_per_element": 8
     }
 }
