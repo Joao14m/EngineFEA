@@ -63,6 +63,41 @@ def create_composition_vectors(
     return perc_aco_vec, perc_ti_vec
 
 
+def create_selected_composition_vectors(
+    composicoes_aco_interesse: tuple[float, ...],
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Cria vetores de composicao a partir de percentuais de aco escolhidos.
+
+    Os valores devem estar em fracao: 1.0 = 100% aco, 0.5 = 50/50,
+    0.0 = 100% titanio.
+    """
+    if len(composicoes_aco_interesse) == 0:
+        raise ValueError("composicoes_aco_interesse nao pode ser vazio.")
+
+    perc_aco_vec = np.asarray(composicoes_aco_interesse, dtype=float).reshape(-1)
+
+    if not np.all(np.isfinite(perc_aco_vec)):
+        raise ValueError("composicoes_aco_interesse deve conter apenas valores finitos.")
+
+    if np.any((perc_aco_vec < 0.0) | (perc_aco_vec > 1.0)):
+        raise ValueError(
+            "composicoes_aco_interesse deve conter fracoes entre 0.0 e 1.0."
+        )
+
+    perc_aco_vec[np.abs(perc_aco_vec) < 1e-12] = 0.0
+    perc_aco_vec[np.abs(perc_aco_vec - 1.0) < 1e-12] = 1.0
+
+    if np.unique(np.round(perc_aco_vec, decimals=12)).size != perc_aco_vec.size:
+        raise ValueError("composicoes_aco_interesse nao deve conter duplicatas.")
+
+    perc_ti_vec = 1.0 - perc_aco_vec
+    perc_ti_vec[np.abs(perc_ti_vec) < 1e-12] = 0.0
+    perc_ti_vec[np.abs(perc_ti_vec - 1.0) < 1e-12] = 1.0
+
+    return perc_aco_vec, perc_ti_vec
+
+
 # CRIA OS NOMES DAS CONFIGURACOES E VARIAVEIS PARA IMPRESSAO E SALVAMENTO DE RESULTADOS.
 def create_configuration_names(
     perc_aco_vec: np.ndarray,
@@ -1112,6 +1147,16 @@ def pack_results(
         "max_iter": np.array([config.max_iter], dtype=np.int32),
         "passo_composicao": np.array([config.passo_composicao], dtype=float),
         "ordem_material": np.array([config.ordem_material], dtype=np.int32),
+        "usa_composicoes_aco_interesse": np.array(
+            [int(config.composicoes_aco_interesse is not None)],
+            dtype=np.int32,
+        ),
+        "composicoes_aco_interesse": np.asarray(
+            config.composicoes_aco_interesse
+            if config.composicoes_aco_interesse is not None
+            else [],
+            dtype=float,
+        ),
     }
 
     results["metadata"] = {
@@ -1125,6 +1170,11 @@ def pack_results(
         "max_dof": max_dof,
         "max_segments": max_segments,
         "max_history_steps": max_history_steps,
+        "composition_source": (
+            "composicoes_aco_interesse"
+            if config.composicoes_aco_interesse is not None
+            else "passo_composicao"
+        ),
         "materials": {
             str(MATERIAL_STEEL): "Aco",
             str(MATERIAL_TITANIUM): "Titanio",
@@ -1200,10 +1250,17 @@ def run_analysis(config: AnalysisConfig) -> dict[str, Any]:
     A = config.b * config.h
     I = config.b * config.h**3 / 12.0
 
-    perc_aco_vec, perc_ti_vec = create_composition_vectors(
-        passo_composicao=config.passo_composicao,
-        ordem_material=config.ordem_material,
-    )
+    using_selected_compositions = config.composicoes_aco_interesse is not None
+
+    if using_selected_compositions:
+        perc_aco_vec, perc_ti_vec = create_selected_composition_vectors(
+            composicoes_aco_interesse=config.composicoes_aco_interesse,
+        )
+    else:
+        perc_aco_vec, perc_ti_vec = create_composition_vectors(
+            passo_composicao=config.passo_composicao,
+            ordem_material=config.ordem_material,
+        )
 
     nomes_config, nomes_var = create_configuration_names(
         perc_aco_vec=perc_aco_vec,
@@ -1224,7 +1281,10 @@ def run_analysis(config: AnalysisConfig) -> dict[str, Any]:
     modes_control = np.arange(config.N - n_ultimos_controle, config.N, dtype=np.int32)
 
     print("\n===============================================================")
-    print("        ANALISE MODAL - TODAS AS CONFIGURACOES")
+    if using_selected_compositions:
+        print("        ANALISE MODAL - CONFIGURACOES SELECIONADAS")
+    else:
+        print("        ANALISE MODAL - TODAS AS CONFIGURACOES")
     print("===============================================================")
     print(f"Comprimento L = {config.L:.6f} m")
     print(f"Secao: b = {config.b:.6f} m | h = {config.h:.6f} m")
@@ -1234,6 +1294,11 @@ def run_analysis(config: AnalysisConfig) -> dict[str, Any]:
     print(f"NE inicial = {config.NE_ini}")
     print(f"Passo de elementos = +{config.passo_elementos}")
     print(f"Passo de composicao = {config.passo_composicao:.6f}")
+    if using_selected_compositions:
+        print(
+            "Composicoes de interesse [aco] = "
+            + " ".join(f"{100.0 * v:.2f}%" for v in perc_aco_vec)
+        )
     print(f"Numero de configuracoes = {n_config}")
 
     if config.ordem_material == 1:
@@ -1290,6 +1355,11 @@ def run_analysis(config: AnalysisConfig) -> dict[str, Any]:
     print(f"NE inicial = {config.NE_ini}")
     print(f"Passo de elementos = +{config.passo_elementos}")
     print(f"Passo de composicao = {config.passo_composicao:.6f}")
+    if using_selected_compositions:
+        print(
+            "Composicoes de interesse [aco] = "
+            + " ".join(f"{100.0 * v:.2f}%" for v in perc_aco_vec)
+        )
     print(
         "Numero de configuracoes = "
         f"{n_converged_without_warning}/{n_config} convergiram sem warning"
