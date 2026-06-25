@@ -1,4 +1,0 @@
-C:/Users/jmmsi/gaveaEngine/build/CMakeFiles/glad.dir
-C:/Users/jmmsi/gaveaEngine/build/CMakeFiles/gaveaEngine.dir
-C:/Users/jmmsi/gaveaEngine/build/CMakeFiles/edit_cache.dir
-C:/Users/jmmsi/gaveaEngine/build/CMakeFiles/rebuild_cache.dir

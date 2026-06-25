@@ -1,7 +1,0 @@
-# ninja log v6
-2	321	8039588980775445	CMakeFiles/glad.dir/third_party/glad/src/glad.c.obj	b29d652a48e8d20c
-322	424	8039588983977407	glad.lib	5185b0d07063c16
-3	542	8040168813785222	CMakeFiles/gaveaEngine.dir/engine/hello_window.cpp.obj	f08850acd71d25aa
-543	935	8040168819182583	gaveaEngine.exe	a50deb4cf94c542c
-15	1087	8040984042634635	CMakeFiles/gaveaEngine.dir/engine/hello_window.cpp.obj	f08850acd71d25aa
-1089	1834	8040984053392977	gaveaEngine.exe	a50deb4cf94c542c

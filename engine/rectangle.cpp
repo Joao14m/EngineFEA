@@ -109,23 +109,32 @@ int main(){
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------
-    
     float vertices[] = {
-        -0.5f, -0.5f, 0.0f,
-        0.5f, -0.5f, 0.0f,
-        0.0f, 0.5f, 0.0f
+        0.5f, 0.5f, 0.0f, // top right
+        0.5f, -0.5f, 0.0f, // bottom right
+        -0.5f, -0.5f, 0.0f, // bottom left
+        -0.5f, 0.5f, 0.0f // top left
+    };
+
+    unsigned int indices[] = {
+        0, 1, 3, // first triangle
+        1, 2, 3 // second triangle
     };
 
     // Vertex Buffer Object, stores vertex data in the GPU's memory 
-    unsigned int VBO, VAO;
+    unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO); 
     glGenBuffers(1, &VBO); // generate 1 buffer object and writes its ID into VBO
-    
+    glGenBuffers(1, &EBO);
+
     glBindVertexArray(VAO);
 
     // 0. copy our vertices array in a buffer for OpenGL to use
     glBindBuffer(GL_ARRAY_BUFFER, VBO); // bind newly created buffer to the GL array buffer
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW); // copies the previously defined vertex data into the buffer's memory  
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO); // bind newly created buffer to the GL array buffer
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW); // copies the index data into the EBO's memory
 
     // 1. set the vertex attributes pointers
     // position vertex attribute (va), size of the va, type of data, normalized or not, stride, offset of position data begins
@@ -133,7 +142,9 @@ int main(){
     glEnableVertexAttribArray(0);
 
     // first 2 param set the location of the lower left corner of the window
-    glViewport(0,0,800,600); // set width and height of the rendering window
+    //glViewport(0,0,800,600); // set width and height of the rendering window
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     // render loop, keeps running until we tell GLFW to stop
     // ------------------------------------
@@ -150,8 +161,10 @@ int main(){
 
         // 3. draw the object
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-
+        //glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0); 
+        
         glfwSwapBuffers(window);
         glfwPollEvents();
     }

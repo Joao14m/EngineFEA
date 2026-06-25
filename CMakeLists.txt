@@ -12,5 +12,8 @@ add_library(glad STATIC third_party/glad/src/glad.c)
 target_include_directories(glad PUBLIC third_party/glad/include)
 
 # Your engine program
-add_executable(gaveaEngine engine/hello_window.cpp)
-target_link_libraries(gaveaEngine PRIVATE glfw glm::glm glad)
+add_executable(helloWindow engine/hello_window.cpp)
+target_link_libraries(helloWindow PRIVATE glfw glm::glm glad)
+
+add_executable(rectangle engine/rectangle.cpp)
+target_link_libraries(rectangle PRIVATE glfw glm::glm glad)
