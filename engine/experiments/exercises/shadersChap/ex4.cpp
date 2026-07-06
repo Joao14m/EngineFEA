@@ -44,7 +44,7 @@ int main(){
     // build and compile our shader program
     // ------------------------------------
     // make the files if you want, if not, triangle comes out white
-    Shader ourShader("shader.vs", "shader.fs");
+    Shader ourShader("include/shader.vs", "include/shader.fs");
 
     float vertices[] = {
         // positions         // colors (red, green and blue)
