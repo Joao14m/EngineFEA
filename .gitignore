@@ -4,3 +4,5 @@ vcpkg_installed/
 .vscode/
 __pycache__/
 *.pyc
+
+.claude-local/
