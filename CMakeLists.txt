@@ -64,5 +64,20 @@ add_custom_command(TARGET ex4 POST_BUILD
         "$<TARGET_FILE_DIR:ex4>/include")
 
 # Production
-#add_executable(eng engine/prod/eng.cpp)
-#target_link_libraries(eng PRIVATE glfw glm::glm glad)
+add_executable(eng engine/prod/eng.cpp)
+target_link_libraries(eng PRIVATE glfw glm::glm glad)
+target_include_directories(eng PRIVATE engine/prod)
+
+# The Shader constructor and the results loader take paths relative to the
+# executable, so the GLSL files and the exported FEA binary are copied next to
+# eng.exe. viga.bin is produced by "python -m modelo_matematico.exportar_engine"
+# and may not exist yet, so its copy goes through a script that skips a missing
+# source instead of failing the build.
+add_custom_command(TARGET eng POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/engine/prod/shaders"
+        "$<TARGET_FILE_DIR:eng>/shaders"
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_SOURCE_DIR}/output/viga.bin
+        -DDST=$<TARGET_FILE_DIR:eng>/viga.bin
+        -P "${CMAKE_SOURCE_DIR}/cmake/copy_if_exists.cmake")
