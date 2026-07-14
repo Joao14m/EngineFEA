@@ -1,8 +1,32 @@
 /vcpkg/
 vcpkg_installed/
 
-.vscode/
+# CMake/Ninja build output (generated, machine-specific)
+/build/
+# Any other build tree (e.g. tests/build/ from launch.json)
+**/build/
+CMakeCache.txt
+CMakeFiles/
+
+# Stray native build artifacts outside the build tree
+*.exe
+*.ilk
+*.pdb
+*.obj
+*.o
+*.a
+*.lib
+linkerrors.txt
+
+# Python caches (math/, tests/)
 __pycache__/
 *.pyc
 
+# OS / editor cruft
+Thumbs.db
+Desktop.ini
+
+.vscode/
+
+# Local Claude Code guidance (machine-specific, not shared)
 .claude-local/
