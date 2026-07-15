@@ -6,6 +6,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "shader.h"
+#include "stb_easy_font.h"
 
 #include <algorithm>
 #include <cmath>
@@ -157,6 +158,7 @@ struct AppState {
     float speed     = 1.0f;
     bool  paused    = false;
     bool  showSpine = true;
+    bool  showHud   = true;
     bool  dirty     = true;
 };
 
@@ -233,6 +235,9 @@ static void keyCallback(GLFWwindow* window, int key, int, int action, int mods)
             break;
         case GLFW_KEY_S:
             app.showSpine = !app.showSpine;
+            break;
+        case GLFW_KEY_H:
+            app.showHud = !app.showHud;
             break;
         case GLFW_KEY_R:
             app.config = 100;
@@ -362,6 +367,7 @@ int main(int argc, char** argv)
               << "  , / .        velocidade da animacao\n"
               << "  espaco       pausa\n"
               << "  S            linha neutra\n"
+              << "  H            mostra/oculta o painel\n"
               << "  R            reset\n"
               << "  Esc          sair\n\n";
 
@@ -423,6 +429,59 @@ int main(int argc, char** argv)
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
+    // HUD de texto. stb_easy_font monta cada caractere com quads (4 vertices de
+    // 16 bytes: x,y,z,rgba) em pixels, y para baixo. O core profile nao desenha
+    // GL_QUADS, entao um EBO estatico converte cada quad em dois triangulos e a
+    // cor vem do uniforme uColor do plainShader (ignoramos z e a cor por vertice).
+    const int kMaxTextQuads = 4000;
+    unsigned int textVAO, textVBO, textEBO;
+    glGenVertexArrays(1, &textVAO);
+    glGenBuffers(1, &textVBO);
+    glGenBuffers(1, &textEBO);
+    glBindVertexArray(textVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)kMaxTextQuads * 4 * 16, nullptr, GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, (void*)0);
+    glEnableVertexAttribArray(0);
+
+    std::vector<unsigned int> textIdx((std::size_t)kMaxTextQuads * 6);
+    for (int q = 0; q < kMaxTextQuads; ++q) {
+        const unsigned int b = 4u * (unsigned int)q;
+        textIdx[6 * q + 0] = b + 0; textIdx[6 * q + 1] = b + 1; textIdx[6 * q + 2] = b + 2;
+        textIdx[6 * q + 3] = b + 0; textIdx[6 * q + 4] = b + 2; textIdx[6 * q + 5] = b + 3;
+    }
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, textEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, textIdx.size() * sizeof(unsigned int),
+                 textIdx.data(), GL_STATIC_DRAW);
+
+    // Desenha uma string (pode conter '\n') em pixels do HUD. Assume que o
+    // plainShader ja esta em uso com a projecao de tela ativa.
+    static char textBuf[80000];
+    auto drawText = [&](float x, float y, const char* s,
+                        float r, float g, float b) {
+        int quads = stb_easy_font_print(x, y, const_cast<char*>(s), nullptr,
+                                        textBuf, sizeof(textBuf));
+        if (quads <= 0)
+            return;
+        quads = std::min(quads, kMaxTextQuads);
+        glBindVertexArray(textVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)quads * 4 * 16, textBuf);
+        plainShader.setVec4("uColor", r, g, b, 1.0f);
+        glDrawElements(GL_TRIANGLES, quads * 6, GL_UNSIGNED_INT, 0);
+    };
+
+    const char* legend =
+        "<- / ->      composicao (Shift: passo de 10)\n"
+        "cima/baixo   modo de vibracao\n"
+        "+ / -        escala da deflexao\n"
+        ", / .        velocidade da animacao\n"
+        "espaco       pausa\n"
+        "S            linha neutra\n"
+        "H            mostra/oculta o painel\n"
+        "R            reset\n"
+        "Esc          sair";
+
     std::vector<float> ribbon, spine;
     std::vector<unsigned int> indices;
     GLsizei indexCount = 0;
@@ -430,7 +489,6 @@ int main(int argc, char** argv)
 
     double t0 = glfwGetTime();
     double tSim = 0.0;
-    char title[256];
 
     while (!glfwWindowShouldClose(window)) {
         const double now = glfwGetTime();
@@ -478,13 +536,6 @@ int main(int argc, char** argv)
         const float phase = 2.0f * 3.14159265f * visualHz * (float)tSim;
         const float amp = app.paused ? app.scale : app.scale * std::sin(phase);
 
-        std::snprintf(title, sizeof(title),
-                      "gaveaEngine  |  config %d/%d  |  %.1f%% aco  |  modo %d  |  "
-                      "f = %.3f Hz  |  escala %.2f%s",
-                      app.config + 1, (int)beam.configs.size(), 100.0f * cfg.pSteel,
-                      app.mode + 1, freq, app.scale, app.paused ? "  |  PAUSADO" : "");
-        glfwSetWindowTitle(window, title);
-
         glClearColor(0.09f, 0.10f, 0.11f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -513,6 +564,31 @@ int main(int argc, char** argv)
             glDrawArrays(GL_LINE_STRIP, 0, spineCount);
         }
 
+        // HUD por cima de tudo. Projecao de tela em pixels (y para baixo),
+        // ampliada por textScale para o texto ficar legivel. A linha de status
+        // carrega a mesma informacao que antes ficava no titulo da janela.
+        if (app.showHud) {
+            const float textScale = 2.0f;
+            const glm::mat4 hudProj = glm::ortho(0.0f, (float)width / textScale,
+                                                 (float)height / textScale, 0.0f,
+                                                 -1.0f, 1.0f);
+            plainShader.use();
+            plainShader.setMat4("uProj", glm::value_ptr(hudProj));
+
+            char status[256];
+            std::snprintf(status, sizeof(status),
+                          "config %d/%d   %.1f%% aco   modo %d   f = %.3f Hz   "
+                          "escala %.2f%s",
+                          app.config + 1, (int)beam.configs.size(),
+                          100.0f * cfg.pSteel, app.mode + 1, freq, app.scale,
+                          app.paused ? "   PAUSADO" : "");
+            drawText(8.0f, 8.0f, status, 0.85f, 0.86f, 0.88f);
+
+            const float legendH = (float)stb_easy_font_height(const_cast<char*>(legend));
+            drawText(8.0f, (float)height / textScale - legendH - 8.0f, legend,
+                     0.62f, 0.64f, 0.68f);
+        }
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -520,10 +596,13 @@ int main(int argc, char** argv)
     glDeleteVertexArrays(1, &ribbonVAO);
     glDeleteVertexArrays(1, &spineVAO);
     glDeleteVertexArrays(1, &staticVAO);
+    glDeleteVertexArrays(1, &textVAO);
     glDeleteBuffers(1, &ribbonVBO);
     glDeleteBuffers(1, &ribbonEBO);
     glDeleteBuffers(1, &spineVBO);
     glDeleteBuffers(1, &staticVBO);
+    glDeleteBuffers(1, &textVBO);
+    glDeleteBuffers(1, &textEBO);
 
     glfwTerminate();
     return 0;

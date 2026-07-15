@@ -66,7 +66,7 @@ add_custom_command(TARGET ex4 POST_BUILD
 # Production
 add_executable(eng engine/prod/eng.cpp)
 target_link_libraries(eng PRIVATE glfw glm::glm glad)
-target_include_directories(eng PRIVATE engine/prod)
+target_include_directories(eng PRIVATE engine/prod third_party)
 
 # The Shader constructor and the results loader take paths relative to the
 # executable, so the GLSL files and the exported FEA binary are copied next to
